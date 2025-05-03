@@ -132,8 +132,8 @@ class ResourceSerializer(serializers.ModelSerializer):
         return f"/api/resources/{obj.id}/download/"
     
     def get_preview_url(self, obj):
-        if obj.file_type in ['pdf', 'png', 'jpg']:
-            return f"/api/resources/{obj.id}/preview/"
+        if obj.file_type in ['pdf', 'png', 'jpg', 'jpeg']:
+            return f'/api/resources/{obj.id}/preview/'
         return None
     
     def format_timesince(self, dt):

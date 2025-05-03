@@ -9,8 +9,10 @@ from django.http import FileResponse
 from django.utils import timezone
 from .models import *
 from .serializers import *
+from django.conf import settings
 from rest_framework.decorators import action
 import os
+from PIL import Image, UnidentifiedImageError
 from .models import NotificationSettings
 from .serializers import NotificationSettingsSerializer
 
@@ -161,7 +163,53 @@ class ResourceViewSet(viewsets.ModelViewSet):
         resource.is_favorite = not resource.is_favorite
         resource.save()
         return Response({'status': 'success', 'is_favorite': resource.is_favorite})
-
+@action(detail=True, methods=['get'])
+def preview(self, request, pk=None):
+    resource = self.get_object()
+    
+    # Permission check
+    if not resource.group.members.filter(id=request.user.id).exists():
+        return Response({"error": "Not authorized"}, status=403)
+    
+    file_path = os.path.join(settings.MEDIA_ROOT, resource.file.name)
+    
+    try:
+        # Handle image previews
+        if resource.file_type.lower() in ['png', 'jpg', 'jpeg', 'gif']:
+            try:
+                with Image.open(file_path) as img:
+                    img.thumbnail((300, 300))  # Create thumbnail
+                    buffer = io.BytesIO()
+                    if resource.file_type.lower() != 'gif':
+                        img.save(buffer, format=resource.file_type)
+                    else:
+                        img.convert('RGB').save(buffer, format='JPEG')
+                    
+                    buffer.seek(0)
+                    content_type = f'image/{resource.file_type}' if resource.file_type.lower() != 'gif' else 'image/jpeg'
+                    return FileResponse(buffer, content_type=content_type)
+            
+            except UnidentifiedImageError:
+                # Fallback to regular download if image is corrupted
+                pass
+        
+        # Handle PDF preview (if you implement PDF rendering)
+        elif resource.file_type.lower() == 'pdf':
+            return FileResponse(
+                open(file_path, 'rb'),
+                content_type='application/pdf',
+                as_attachment=False
+            )
+        
+        # Default file download
+        return FileResponse(
+            open(file_path, 'rb'),
+            content_type=f'application/{resource.file_type}',
+            as_attachment=True
+        )
+    
+    except FileNotFoundError:
+        return Response({"error": "File not found"}, status=404)
 # Session Views
 class SessionViewSet(viewsets.ModelViewSet):
     serializer_class = SessionSerializer
